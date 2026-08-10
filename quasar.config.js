@@ -44,6 +44,7 @@ export default defineConfig((/* ctx */) => {
       // filenameBasedRouting: true,
 
       vueRouterMode: 'hash', // available values: 'hash', 'history'
+      publicPath: '/invoice-scanning-app/',
       // vueRouterBase,
 
       // publicPath: '/',
