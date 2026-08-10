@@ -72,6 +72,30 @@
       <div class="text-body2 self-center">共 {{ store.rows.length }} 条</div>
     </div>
 
+    <div class="row items-center q-gutter-md q-mb-md last-scan">
+      <div class="text-subtitle2 text-weight-medium">最近扫描</div>
+      <div class="text-body2">
+        发票号码：<span class="text-weight-bold">{{ lastScanned?.invoiceNo || '—' }}</span>
+      </div>
+      <div class="text-body2">
+        发票日期：<span class="text-weight-bold">{{ lastScanned?.invoiceDate || '—' }}</span>
+      </div>
+      <div class="text-body2">
+        金额：<span class="text-weight-bold">{{ lastScanned?.amount || '—' }}</span>
+      </div>
+      <q-btn
+        flat
+        dense
+        round
+        color="negative"
+        icon="delete"
+        :disable="!lastScanned"
+        @click="onRemoveLastScanned"
+      >
+        <q-tooltip>移除</q-tooltip>
+      </q-btn>
+    </div>
+
     <q-table
       flat
       bordered
@@ -167,6 +191,16 @@ const cameraDialogMounted = ref(false)
 const autoEnter = ref(localStorage.getItem(AUTO_ENTER_KEY) === '1')
 const invoiceDrafts = reactive({})
 const scanReady = computed(() => !editing.value && !cameraScanOpen.value)
+
+/** 最近一次扫码登记的记录（跳过手动新增的空白行） */
+const lastScanned = computed(() => {
+  for (let i = store.rows.length - 1; i >= 0; i -= 1) {
+    if (store.rows[i].raw) {
+      return store.rows[i]
+    }
+  }
+  return null
+})
 
 let autoEnterTimer = null
 
@@ -301,6 +335,20 @@ function onInvoiceNoBlur (row) {
   endEdit()
 }
 
+function onRemoveLastScanned () {
+  if (!lastScanned.value) {
+    return
+  }
+  const { id, invoiceNo } = lastScanned.value
+  store.removeRow(id)
+  delete invoiceDrafts[id]
+  $q.notify({
+    type: 'warning',
+    message: invoiceNo ? `已移除：${invoiceNo}` : '已移除最近扫描记录'
+  })
+  nextTick(focusScanInput)
+}
+
 function onAddBlank () {
   store.addBlank()
   $q.notify({ type: 'info', message: '已新增空白行' })
@@ -364,5 +412,12 @@ onUnmounted(() => {
 
 .scan-actions {
   flex: 0 0 auto;
+}
+
+.last-scan {
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
 }
 </style>
