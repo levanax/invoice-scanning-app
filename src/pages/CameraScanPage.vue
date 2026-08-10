@@ -1,80 +1,65 @@
 <template>
-  <q-dialog
-    :model-value="modelValue"
-    persistent
-    maximized
-    transition-show="slide-up"
-    transition-hide="slide-down"
-    @update:model-value="(open) => emit('update:modelValue', open)"
-    @show="startScanner"
-    @hide="stopScanner"
-  >
-    <q-card class="column full-height camera-scan-card">
-      <q-bar class="bg-primary text-white">
-        <div class="text-subtitle1">手机扫码</div>
-        <q-space />
-        <q-btn dense flat icon="close" aria-label="关闭" @click="close" />
-      </q-bar>
+  <q-page class="column camera-scan-page">
+    <q-bar class="bg-primary text-white">
+      <q-btn dense flat icon="arrow_back" aria-label="返回" @click="goBack" />
+      <div class="text-subtitle1 q-ml-sm">手机扫码</div>
+      <q-space />
+    </q-bar>
 
-      <div class="last-scan-banner row items-center no-wrap q-px-md q-py-sm">
-        <div class="col overflow-hidden">
-          <div class="text-caption text-grey-7">最近扫描</div>
-          <template v-if="lastScan">
-            <div class="text-subtitle2 text-weight-medium ellipsis">
-              发票号码：{{ lastScan.invoiceNo || '（空）' }}
-            </div>
-            <div class="text-body2">
-              发票日期：{{ lastScan.invoiceDate || '—' }}
-            </div>
-            <div class="text-body2">
-              金额：{{ lastScan.amount || '—' }}
-            </div>
-          </template>
-          <div v-else class="text-body2 text-grey-6">
-            暂无扫描记录
+    <div class="last-scan-banner row items-center no-wrap q-px-md q-py-sm">
+      <div class="col overflow-hidden">
+        <div class="text-caption text-grey-7">最近扫描</div>
+        <template v-if="lastScan">
+          <div class="text-subtitle2 text-weight-medium ellipsis">
+            发票号码：{{ lastScan.invoiceNo || '（空）' }}
           </div>
+          <div class="text-body2">
+            发票日期：{{ lastScan.invoiceDate || '—' }}
+          </div>
+          <div class="text-body2">
+            金额：{{ lastScan.amount || '—' }}
+          </div>
+        </template>
+        <div v-else class="text-body2 text-grey-6">
+          暂无扫描记录
         </div>
-        <q-btn
-          v-if="lastScan"
-          flat
-          dense
-          color="negative"
-          icon="delete"
-          label="移除"
-          class="q-ml-sm"
-          @click="removeLastScan"
-        />
       </div>
+      <q-btn
+        v-if="lastScan"
+        flat
+        dense
+        color="negative"
+        icon="delete"
+        label="移除"
+        class="q-ml-sm"
+        @click="removeLastScan"
+      />
+    </div>
 
-      <q-card-section class="col column items-center q-gutter-md">
-        <div class="text-body2 text-grey-7 text-center">
-          将发票二维码对准取景框，识别成功后会自动登记
-        </div>
-        <div id="camera-scan-reader" class="camera-scan-reader" />
-        <div v-if="errorMessage" class="text-negative text-body2 text-center">
-          {{ errorMessage }}
-        </div>
-      </q-card-section>
-    </q-card>
-  </q-dialog>
+    <div class="col column items-center q-gutter-md q-pa-md">
+      <div class="text-body2 text-grey-7 text-center">
+        将发票二维码对准取景框，识别成功后会自动登记
+      </div>
+      <div id="camera-scan-reader" class="camera-scan-reader" />
+      <div v-if="errorMessage" class="text-negative text-body2 text-center">
+        {{ errorMessage }}
+      </div>
+    </div>
+  </q-page>
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { parseInvoiceQr } from '@/domain/invoiceQr'
 import { useInvoiceStore } from '@/stores/invoices'
 
-defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  }
-})
-
-const emit = defineEmits(['update:modelValue', 'scanned'])
-
+const router = useRouter()
+const $q = useQuasar()
 const store = useInvoiceStore()
+
 const lastScan = ref(null)
 const errorMessage = ref('')
 const SCANNER_ELEMENT_ID = 'camera-scan-reader'
@@ -85,6 +70,14 @@ let lastRaw = ''
 let lastAt = 0
 
 const DEDUPE_MS = 2500
+
+function goBack () {
+  if (window.history.state?.back != null) {
+    router.back()
+  } else {
+    router.replace('/')
+  }
+}
 
 function toLastScanView (row) {
   return {
@@ -131,8 +124,29 @@ function rememberScan (raw) {
     invoiceDate: parsed.invoiceDate,
     amount: parsed.amount
   }
-  // 等父组件写入 store 后再绑定可移除的行 id
   nextTick(() => syncLastScanRowId(parsed))
+}
+
+function applyScanResult (raw) {
+  const text = String(raw ?? '').trim()
+  if (!text) {
+    return
+  }
+
+  const result = store.addFromScan(text)
+  if (!result.ok && result.reason === 'duplicate') {
+    $q.notify({
+      type: 'negative',
+      message: `发票号码已存在：${result.invoiceNo}`
+    })
+  } else if (result.ok) {
+    $q.notify({
+      type: 'positive',
+      message: result.invoiceNo
+        ? `已登记：${result.invoiceNo}`
+        : '已登记（发票号码为空，可手动补全）'
+    })
+  }
 }
 
 function removeLastScan () {
@@ -217,7 +231,7 @@ async function startScanner () {
       lastRaw = raw
       lastAt = now
       rememberScan(raw)
-      emit('scanned', raw)
+      applyScanResult(raw)
     }
 
     try {
@@ -248,9 +262,9 @@ async function startScanner () {
   }
 }
 
-function close () {
-  emit('update:modelValue', false)
-}
+onMounted(() => {
+  startScanner()
+})
 
 onBeforeUnmount(() => {
   stopScanner()
@@ -258,7 +272,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.camera-scan-card {
+.camera-scan-page {
+  min-height: 100%;
   background: #f5f5f5;
 }
 

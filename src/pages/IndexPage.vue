@@ -3,11 +3,9 @@
     <div class="row items-center q-gutter-sm q-mb-md">
       <q-badge :color="scanReady ? 'positive' : 'warning'" class="q-pa-sm">
         {{
-          cameraScanOpen
-            ? '手机扫码中'
-            : scanReady
-              ? '扫码就绪'
-              : '编辑中（扫码暂停抢焦点）'
+          scanReady
+            ? '扫码就绪'
+            : '编辑中（扫码暂停抢焦点）'
         }}
       </q-badge>
       <div class="text-caption text-grey-7">
@@ -57,12 +55,6 @@
         />
       </div>
     </div>
-
-    <CameraScanDialog
-      v-if="cameraDialogMounted"
-      v-model="cameraScanOpen"
-      @scanned="onCameraScanned"
-    />
 
     <div class="row q-gutter-sm q-mb-md">
       <q-btn color="primary" icon="add" label="新增行" unelevated @click="onAddBlank" />
@@ -170,27 +162,25 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useInvoiceStore } from '@/stores/invoices'
 import { exportInvoicesToExcel } from '@/utils/exportExcel'
 
-const CameraScanDialog = defineAsyncComponent(() => import('@/components/CameraScanDialog.vue'))
-
 const AUTO_ENTER_KEY = 'invoice-scanning.autoEnter'
 const AUTO_ENTER_IDLE_MS = 280
 
+const router = useRouter()
 const $q = useQuasar()
 const store = useInvoiceStore()
 
 const scanInputRef = ref(null)
 const scanBuffer = ref('')
 const editing = ref(false)
-const cameraScanOpen = ref(false)
-const cameraDialogMounted = ref(false)
 const autoEnter = ref(localStorage.getItem(AUTO_ENTER_KEY) === '1')
 const invoiceDrafts = reactive({})
-const scanReady = computed(() => !editing.value && !cameraScanOpen.value)
+const scanReady = computed(() => !editing.value)
 
 /** 最近一次扫码登记的记录（跳过手动新增的空白行） */
 const lastScanned = computed(() => {
@@ -241,7 +231,7 @@ const columns = [
 ]
 
 function focusScanInput () {
-  if (editing.value || cameraScanOpen.value) {
+  if (editing.value) {
     return
   }
   const input = scanInputRef.value
@@ -273,21 +263,8 @@ function applyScanResult (raw) {
 }
 
 function openCameraScan () {
-  cameraDialogMounted.value = true
-  cameraScanOpen.value = true
+  router.push({ name: 'camera-scan' })
 }
-
-function onCameraScanned (raw) {
-  applyScanResult(raw)
-}
-
-watch(cameraScanOpen, (open) => {
-  if (!open) {
-    nextTick(() => {
-      setTimeout(focusScanInput, 50)
-    })
-  }
-})
 
 function beginEdit () {
   editing.value = true
@@ -301,7 +278,7 @@ function endEdit () {
 }
 
 function onScanBlur () {
-  if (editing.value || cameraScanOpen.value) {
+  if (editing.value) {
     return
   }
   setTimeout(focusScanInput, 80)
