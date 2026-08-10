@@ -16,6 +16,21 @@
         <q-btn dense flat icon="close" aria-label="关闭" @click="close" />
       </q-bar>
 
+      <div class="last-scan-banner q-px-md q-py-sm">
+        <div class="text-caption text-grey-7">最近扫描</div>
+        <template v-if="lastScan">
+          <div class="text-subtitle2 text-weight-medium ellipsis">
+            发票号码：{{ lastScan.invoiceNo || '（空）' }}
+          </div>
+          <div class="text-body2">
+            发票日期：{{ lastScan.invoiceDate || '—' }}
+          </div>
+        </template>
+        <div v-else class="text-body2 text-grey-6">
+          暂无扫描记录
+        </div>
+      </div>
+
       <q-card-section class="col column items-center q-gutter-md">
         <div class="text-body2 text-grey-7 text-center">
           将发票二维码对准取景框，识别成功后会自动登记
@@ -32,6 +47,8 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import { parseInvoiceQr } from '@/domain/invoiceQr'
+import { useInvoiceStore } from '@/stores/invoices'
 
 defineProps({
   modelValue: {
@@ -42,6 +59,8 @@ defineProps({
 
 const emit = defineEmits(['update:modelValue', 'scanned'])
 
+const store = useInvoiceStore()
+const lastScan = ref(null)
 const errorMessage = ref('')
 const SCANNER_ELEMENT_ID = 'camera-scan-reader'
 
@@ -51,6 +70,27 @@ let lastRaw = ''
 let lastAt = 0
 
 const DEDUPE_MS = 2500
+
+function seedLastScanFromStore () {
+  const rows = store.rows
+  if (!rows.length) {
+    lastScan.value = null
+    return
+  }
+  const row = rows[rows.length - 1]
+  lastScan.value = {
+    invoiceNo: row.invoiceNo ?? '',
+    invoiceDate: row.invoiceDate ?? ''
+  }
+}
+
+function rememberScan (raw) {
+  const parsed = parseInvoiceQr(raw)
+  lastScan.value = {
+    invoiceNo: parsed.invoiceNo,
+    invoiceDate: parsed.invoiceDate
+  }
+}
 
 async function stopScanner () {
   if (!scanner) {
@@ -83,6 +123,7 @@ async function startScanner () {
   errorMessage.value = ''
   lastRaw = ''
   lastAt = 0
+  seedLastScanFromStore()
 
   try {
     await nextTick()
@@ -112,6 +153,7 @@ async function startScanner () {
       }
       lastRaw = raw
       lastAt = now
+      rememberScan(raw)
       emit('scanned', raw)
     }
 
@@ -155,6 +197,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .camera-scan-card {
   background: #f5f5f5;
+}
+
+.last-scan-banner {
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .camera-scan-reader {

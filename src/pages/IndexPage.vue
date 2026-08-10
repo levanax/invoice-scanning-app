@@ -19,41 +19,43 @@
       </div>
     </div>
 
-    <div class="row items-center q-gutter-sm q-mb-md">
+    <div class="row items-center q-gutter-sm q-mb-md scan-toolbar">
       <q-input
         ref="scanInputRef"
         v-model="scanBuffer"
         outlined
         dense
-        class="scan-input col"
+        class="scan-input"
         label="扫码输入"
         placeholder="等待扫码枪输入…"
         autocomplete="off"
         @keydown.enter.prevent="onScanSubmit"
         @blur="onScanBlur"
       />
-      <q-btn
-        color="primary"
-        icon="playlist_add"
-        label="录入"
-        unelevated
-        :disable="!scanBuffer.trim()"
-        @click="onScanSubmit"
-      />
-      <q-btn
-        color="primary"
-        outline
-        icon="qr_code_scanner"
-        label="手机扫码"
-        @click="openCameraScan"
-      />
-      <q-toggle
-        v-model="autoEnter"
-        label="自动录入"
-        color="primary"
-        dense
-        class="self-center"
-      />
+      <div class="row items-center q-gutter-sm no-wrap scan-actions">
+        <q-btn
+          color="primary"
+          icon="playlist_add"
+          label="录入"
+          unelevated
+          :disable="!scanBuffer.trim()"
+          @click="onScanSubmit"
+        />
+        <q-btn
+          color="primary"
+          outline
+          icon="qr_code_scanner"
+          label="手机扫码"
+          @click="openCameraScan"
+        />
+        <q-toggle
+          v-model="autoEnter"
+          label="自动录入"
+          color="primary"
+          dense
+          class="self-center"
+        />
+      </div>
     </div>
 
     <CameraScanDialog
@@ -321,13 +323,23 @@ function onClearAll () {
   })
 }
 
-function onExport () {
+async function onExport () {
   if (!store.rows.length) {
     $q.notify({ type: 'warning', message: '没有可导出的数据' })
     return
   }
-  exportInvoicesToExcel(store.rows)
-  $q.notify({ type: 'positive', message: 'Excel 已导出' })
+  try {
+    const mode = await exportInvoicesToExcel(store.rows)
+    $q.notify({
+      type: 'positive',
+      message: mode === 'shared' ? '已打开系统分享' : 'Excel 已下载'
+    })
+  } catch (err) {
+    // 用户取消系统分享不算失败
+    if (err?.name === 'AbortError') return
+    console.error(err)
+    $q.notify({ type: 'negative', message: '导出失败，请重试' })
+  }
 }
 
 onMounted(() => {
@@ -340,7 +352,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.scan-toolbar {
+  flex-wrap: wrap;
+}
+
 .scan-input {
-  max-width: 720px;
+  /* 放不下输入框最小宽度+操作区时换行，避免输入框被横向挤压 */
+  flex: 1 0 16rem;
+  max-width: min(720px, 100%);
+}
+
+.scan-actions {
+  flex: 0 0 auto;
 }
 </style>
