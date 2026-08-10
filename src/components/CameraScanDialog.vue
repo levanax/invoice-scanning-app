@@ -16,19 +16,34 @@
         <q-btn dense flat icon="close" aria-label="关闭" @click="close" />
       </q-bar>
 
-      <div class="last-scan-banner q-px-md q-py-sm">
-        <div class="text-caption text-grey-7">最近扫描</div>
-        <template v-if="lastScan">
-          <div class="text-subtitle2 text-weight-medium ellipsis">
-            发票号码：{{ lastScan.invoiceNo || '（空）' }}
+      <div class="last-scan-banner row items-center no-wrap q-px-md q-py-sm">
+        <div class="col overflow-hidden">
+          <div class="text-caption text-grey-7">最近扫描</div>
+          <template v-if="lastScan">
+            <div class="text-subtitle2 text-weight-medium ellipsis">
+              发票号码：{{ lastScan.invoiceNo || '（空）' }}
+            </div>
+            <div class="text-body2">
+              发票日期：{{ lastScan.invoiceDate || '—' }}
+            </div>
+            <div class="text-body2">
+              金额：{{ lastScan.amount || '—' }}
+            </div>
+          </template>
+          <div v-else class="text-body2 text-grey-6">
+            暂无扫描记录
           </div>
-          <div class="text-body2">
-            发票日期：{{ lastScan.invoiceDate || '—' }}
-          </div>
-        </template>
-        <div v-else class="text-body2 text-grey-6">
-          暂无扫描记录
         </div>
+        <q-btn
+          v-if="lastScan"
+          flat
+          dense
+          color="negative"
+          icon="delete"
+          label="移除"
+          class="q-ml-sm"
+          @click="removeLastScan"
+        />
       </div>
 
       <q-card-section class="col column items-center q-gutter-md">
@@ -71,25 +86,73 @@ let lastAt = 0
 
 const DEDUPE_MS = 2500
 
+function toLastScanView (row) {
+  return {
+    id: row.id,
+    invoiceNo: row.invoiceNo ?? '',
+    invoiceDate: row.invoiceDate ?? '',
+    amount: row.amount ?? ''
+  }
+}
+
 function seedLastScanFromStore () {
   const rows = store.rows
   if (!rows.length) {
     lastScan.value = null
     return
   }
-  const row = rows[rows.length - 1]
-  lastScan.value = {
-    invoiceNo: row.invoiceNo ?? '',
-    invoiceDate: row.invoiceDate ?? ''
+  lastScan.value = toLastScanView(rows[rows.length - 1])
+}
+
+function syncLastScanRowId (parsed) {
+  const rows = store.rows
+  if (!rows.length) {
+    return
+  }
+  const invoiceNo = String(parsed.invoiceNo ?? '').trim()
+  const last = rows[rows.length - 1]
+  if (invoiceNo && String(last.invoiceNo ?? '').trim() === invoiceNo) {
+    lastScan.value = toLastScanView(last)
+    return
+  }
+  const matched = invoiceNo
+    ? rows.find((row) => String(row.invoiceNo ?? '').trim() === invoiceNo)
+    : null
+  if (matched) {
+    lastScan.value = toLastScanView(matched)
   }
 }
 
 function rememberScan (raw) {
   const parsed = parseInvoiceQr(raw)
   lastScan.value = {
+    id: null,
     invoiceNo: parsed.invoiceNo,
-    invoiceDate: parsed.invoiceDate
+    invoiceDate: parsed.invoiceDate,
+    amount: parsed.amount
   }
+  // 等父组件写入 store 后再绑定可移除的行 id
+  nextTick(() => syncLastScanRowId(parsed))
+}
+
+function removeLastScan () {
+  const current = lastScan.value
+  if (!current) {
+    return
+  }
+
+  if (current.id) {
+    store.removeRow(current.id)
+  } else {
+    const rows = store.rows
+    const last = rows[rows.length - 1]
+    const invoiceNo = String(current.invoiceNo ?? '').trim()
+    if (last && invoiceNo && String(last.invoiceNo ?? '').trim() === invoiceNo) {
+      store.removeRow(last.id)
+    }
+  }
+
+  seedLastScanFromStore()
 }
 
 async function stopScanner () {
