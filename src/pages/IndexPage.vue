@@ -1,5 +1,12 @@
 <template>
   <q-page class="q-pa-md">
+    <q-banner dense rounded class="bg-warning text-dark q-mb-md export-hint">
+      <template #avatar>
+        <q-icon name="warning" color="dark" />
+      </template>
+      请及时导出 Excel 存储数据。由于数据保存在本设备浏览器中，清理缓存或更换设备可能导致丢失，请避免数据丢失。
+    </q-banner>
+
     <div class="row items-center q-gutter-sm q-mb-md">
       <q-badge :color="scanReady ? 'positive' : 'warning'" class="q-pa-sm">
         {{
